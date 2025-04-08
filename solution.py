@@ -5,31 +5,29 @@ import pandas as pd
 import sqlite3
 import csv
 import math
-import sqlite3
 
 # Part 1: Cleaning the existing files, and creating new files --------------------------------------
 
-# # Read the CSV files, replace \N with math.nan, create new files
-# files = ['cast', 'titles', 'people']
-# for f in files:
-#     df = pd.read_csv(f'{f}.csv', encoding='utf-8') # preserves special characters
-#     df.replace(r'\\N', math.nan, regex=True, inplace=True)  # Replace \N with math.nan 
-#     df.to_csv(f'{f}_cleaned.csv', index=False, encoding='utf-8') # preserves special characters
+# Read the CSV files, replace \N with math.nan, create new files
+files = ['cast', 'titles', 'people']
+for f in files:
+    df = pd.read_csv(f'{f}.csv', encoding='utf-8') # preserves special characters
+    df.replace(r'\\N', math.nan, regex=True, inplace=True)  # Replace \N with math.nan 
+    df.to_csv(f'{f}_cleaned.csv', index=False, encoding='utf-8') # preserves special characters
 
-# # Create categories file
-# df = pd.read_csv('cast_cleaned.csv', encoding='utf-8')
-# categories = sorted(df['category'].dropna().unique())
-# category_df = pd.DataFrame({
-#     'CATEGORY_ID': range(1, len(categories) + 1),  # IDs from 1 to the number of categories
-#     'CATEGORY_NAME': categories
-# })
-# category_df.to_csv('category.csv', index=False, encoding='utf-8')
+# Create categories file
+df = pd.read_csv('cast_cleaned.csv', encoding='utf-8')
+categories = sorted(df['category'].dropna().unique())
+category_df = pd.DataFrame({
+    'CATEGORY_ID': range(1, len(categories) + 1),  # IDs from 1 to the number of categories
+    'CATEGORY_NAME': categories
+})
+category_df.to_csv('category.csv', index=False, encoding='utf-8')
 
-# # In cast_cleaned.csv, replace category string with category ID
-# df = pd.read_csv('cast_cleaned.csv', encoding='utf-8')
-# df['category'] = df['category'].replace(categories, category_df['CATEGORY_ID'])
-# df.to_csv('cast_updated.csv', index=False, encoding='utf-8')
-
+# In cast_cleaned.csv, replace category string with category ID
+df = pd.read_csv('cast_cleaned.csv', encoding='utf-8')
+df['category'] = df['category'].replace(categories, category_df['CATEGORY_ID'])
+df.to_csv('cast_updated.csv', index=False, encoding='utf-8')
 
 
 # Part 2: Create a database file, imdb.db, using the files cleaned and created ---------------------
@@ -45,8 +43,9 @@ cur = con.cursor()
 #   “people” with columns from the people.csv
 #   “cast” with columns from the cast.csv
 
-# the tables will be created with the data from the respective files.
-# Column names will be differnet to reflect primary and foreign keys
+# The tables will be created with the data from the respective files.
+# Column names will be more meaningful
+# Primary and foreign keys will be added
 
 files = {
   'Table': ['titles', 'productions', 'ratings', 'people', 'cast'],
@@ -66,16 +65,10 @@ def create_table(r):
   2. Creates database table based on the definitions in the input dataframe raw
   3. Inserts data from the CSV file to the newly created table 
   '''
-  with open (f"{r['File']}.csv", 'r') as file:
-    #dr = csv.DictReader(file, delimiter = ',')
-    reader = csv.reader(file, delimiter=',')
-    next(reader)  # Skip the header row. We need this becuase we have new column names from files
-    #to_db = [tuple(row[i] for i in range(len(r['Columns']))) for row in reader]
-    to_db = [
-        tuple(None if val == 'nan' else val 
-              for i, val in enumerate(row) if i < len(r['Columns']))
-        for row in reader
-    ]
+  with open (f"{r['Table']}.csv", 'r') as file:
+    dr = csv.DictReader(file, delimiter = ',')
+    file_column_names = dr.fieldnames
+    to_db = [tuple(math.nan if row[col] == '\\N' else row[col] for col in file_column_names) for row in dr] # replace \N with math.nan
     
     # Drop table if exists
     drop_table_sql = f"DROP TABLE IF EXISTS {r['Table']};"
@@ -86,10 +79,9 @@ def create_table(r):
     cur.execute(create_table_sql)
     
     # Insert data into table
-    placeholders = ', '.join(['?' for _ in r['Columns']])
+    placeholders = ', '.join(['?' for _ in file_column_names])
     insert_sql = f"INSERT INTO {r['Table']} VALUES ({placeholders});"
     cur.executemany(insert_sql, to_db)
-
 
 
 # Run for all tables   
